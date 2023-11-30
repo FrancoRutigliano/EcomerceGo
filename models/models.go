@@ -3,7 +3,7 @@ package models
 import (
 	"time"
 
-	"go.mongo.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 // Creamos una colección User para mongoDB
