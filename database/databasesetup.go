@@ -44,3 +44,9 @@ func UserData(client *mongo.Client, collectionName string) *mongo.Collection {
 	var collection *mongo.Collection = client.Database("Ecommerce").Collection(collectionName)
 	return collection // Devuelve la colección obtenida
 }
+
+func ProductData(client *mongo.Client, collectionName string) *mongo.Collection {
+	// Obtiene la colección de productos específica del cliente de MongoDB para la base de datos "Ecommerce"
+	var productCollection *mongo.Collection = client.Database("Ecommerce").Collection(collectionName)
+	return productCollection // Devuelve la colección de productos obtenida
+}
