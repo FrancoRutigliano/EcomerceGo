@@ -37,4 +37,10 @@ func DBSet() *mongo.Client {
 	return client // Devolver el cliente de MongoDB conectado
 }
 
-var Client *mongo.Client = DBSet()
+var Client *mongo.Client = DBSet() // Inicializa una variable global Client con el cliente de MongoDB obtenido de DBSet()
+
+func UserData(client *mongo.Client, collectionName string) *mongo.Collection {
+	// Obtiene la colección específica del cliente de MongoDB para la base de datos "Ecommerce"
+	var collection *mongo.Collection = client.Database("Ecommerce").Collection(collectionName)
+	return collection // Devuelve la colección obtenida
+}
