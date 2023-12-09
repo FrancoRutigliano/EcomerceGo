@@ -205,5 +205,39 @@ func (app *Application) BuyFromCart() gin.HandlerFunc {
 }
 
 func (app *Application) InstantBuy() gin.HandlerFunc {
-	panic("Func para Compra instantanea")
+	return func(c *gin.Context) {
+		UserQueryID := c.Query("userid")
+		// En el caso de que el user que devuelve el query este vacio
+		if UserQueryID == "" {
+			log.Println("User ID is empty")
+			_ = c.AbortWithError(http.StatusBadRequest, errors.New("user id is empty"))
+		}
+
+		ProductQueryID := c.Query("pid")
+		if ProductQueryID == "" {
+			log.Println("Product id is empty")
+			c.AbortWithError(http.StatusBadRequest, errors.New("product id is empty"))
+		}
+		// Transformamos  de Hex a lo que devuelve mongo como parametro de la url http
+		productID, err := primitive.ObjectIDFromHex(ProductQueryID)
+		// si no se pudo hacer la conversion
+		if err != nil {
+			log.Println(err)
+			c.AbortWithStatus(http.StatusInternalServerError)
+			return
+		}
+
+		var ctx, cancel = context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+
+		// Invocamos a la funcion que se va a conectar con la base de datos
+		err = database.InstantBuyer(ctx, app.prodCollection, app.userCollection, productID, UserQueryID)
+		// debemos corroborar si el error no esta vacio
+		// ya que si esta vacio pudo haber algún problema en la conexion a base de datos
+		if err != nil {
+			c.IndentedJSON(http.StatusInternalServerError, err)
+		}
+
+		c.IndentedJSON(200, "Successfully placed the order")
+	}
 }
