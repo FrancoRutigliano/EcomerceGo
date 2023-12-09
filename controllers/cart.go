@@ -82,7 +82,43 @@ func (app *Application) AddToCart() gin.HandlerFunc {
 }
 
 func (app *Application) RemoveItem() gin.HandlerFunc {
-	panic("Func para Remover un carrito")
+	return func(c *gin.Context) {
+		// Vamos a estar extrayendo el valor id de una solicitud http
+		productQueryID := c.Query("id")
+		if productQueryID == "" {
+			log.Println("product id is invalid")
+			_ = c.AbortWithError(http.StatusBadRequest, errors.New("product id is empty"))
+			return
+		}
+
+		// Extraer el valor de el userID de una solicitud http
+		userQueryID := c.Query("userID")
+		if userQueryID == "" {
+			log.Println("user id is empty")
+			_ = c.AbortWithError(http.StatusBadRequest, errors.New("UserID is empty"))
+			return
+		}
+
+		// Ahora necesito transformar lo que probablemente venga en formato hexadecimal desde la solicitud http.
+		// Por ejemplo http://ejemplo.com/ruta?id=5ff1e194b8576f48c2f8c7a1
+		ProductID, err := primitive.ObjectIDFromHex(productQueryID)
+		if err != nil {
+			log.Println(err)
+			c.AbortWithStatus(http.StatusInternalServerError)
+		}
+
+		// El contexto que vamos a declarar va a ser pasado a la funcion que hace conexion con la DB
+		var ctx, cancel = context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		// Ahora invocamos a la funcion que conecta y realiza los cambios en la base de datos
+		err = database.RemoveCartItem(ctx, app.prodCollection, app.userCollection, ProductID, userQueryID)
+		// Deberíamos comprobar si la conexion salió bien
+		if err != nil {
+			c.IndentedJSON(http.StatusInternalServerError, err)
+		}
+		// si todo salio bien
+		c.IndentedJSON(200, "Successfully removed from cart")
+	}
 }
 
 func GetItemFromCart() gin.HandlerFunc {
