@@ -182,7 +182,26 @@ func GetItemFromCart() gin.HandlerFunc {
 }
 
 func (app *Application) BuyFromCart() gin.HandlerFunc {
-	panic("Func paraComprar del carrito")
+	return func(c *gin.Context) {
+		userQueryID := c.Query("id")
+		if userQueryID == "" {
+			log.Println("user ID is empty")
+			_ = c.AbortWithError(http.StatusBadRequest, errors.New("UserID is empty"))
+		}
+
+		// Ahora debemos crear un context y una cancelacion del contexto. Todo esto para pasarselo a la funcion que llama a la base de datos
+		var ctx, cancel = context.WithTimeout(context.Background(), 100*time.Second)
+		defer cancel()
+
+		// Vamos a llamar a la funcion que hace conexion con la base de datos
+		err := database.BuyItemFromCart(ctx, app.userCollection, userQueryID)
+		// caso de que haya un problema en la conexion, damos un aviso del error
+		if err != nil {
+			log.Println(err)
+			c.IndentedJSON(http.StatusInternalServerError, err)
+		}
+		c.IndentedJSON(200, "Successfully Placed the order")
+	}
 }
 
 func (app *Application) InstantBuy() gin.HandlerFunc {
