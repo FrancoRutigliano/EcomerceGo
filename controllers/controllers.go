@@ -2,12 +2,14 @@ package controllers
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"net/http"
 	"time"
 
 	"github.com/FrancoRutigliano/EcommerceGolang/database"
 	"github.com/FrancoRutigliano/EcommerceGolang/models"
+	generate "github.com/FrancoRutigliano/EcommerceGolang/tokens"
 	"github.com/gin-gonic/gin"
 	"github.com/go-playground/validator/v10"
 	"go.mongodb.org/mongo-driver/bson"
@@ -130,5 +132,51 @@ func Sigup() gin.HandlerFunc {
 }
 
 func Login() gin.HandlerFunc {
-	panic("Not Used Yet")
+
+	return func(c *gin.Context) {
+		// Crear un contexto con un límite de tiempo de 100 segundos
+		var ctx, cancel = context.WithTimeout(context.Background(), 100*time.Second)
+		defer cancel() // Cancelar el contexto cuando la función retorne
+
+		var user models.User      // Crear una variable para almacenar un usuario
+		var founduser models.User // Crear una variable para almacenar un usuario encontrado
+
+		// Intentar vincular el cuerpo de la solicitud JSON al objeto 'user'
+		if err := c.BindJSON(&user); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err}) // Enviar una respuesta de error si hay un problema con el JSON
+		}
+
+		// Buscar un usuario en la base de datos usando el email proporcionado en 'user'
+		err := UserCollection.FindOne(ctx, bson.M{"email": user.Email}).Decode(&founduser)
+		defer cancel() // Asegurarse de cancelar el contexto al final de la función
+
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "login or password incorrect"})
+			return // Enviar un mensaje de error si no se encuentra el usuario en la base de datos
+		}
+
+		// ... (Aquí faltaría agregar la lógica para comparar contraseñas o realizar alguna acción con el usuario encontrado)
+		PasswordIsValid, msg := VerifyPassword(*user.Password, *founduser.Password)
+
+		defer cancel()
+
+		// Todo esta lógica estaría sucediendo si la contraseña no es valida.
+		// Para determinar esto, tenemos que checkear la password de ese usuario que tenemos en la DB y las Password que el usuario nos entrega en el login
+		if !PasswordIsValid {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": msg})
+			fmt.Println(msg)
+			return
+		}
+		// Si estas dos contraseñas "machean", generamos el token
+		token, refreshToken, _ := generate.TokenGenerator(*founduser.Email, *founduser.First_Name, *founduser.Last_Name, founduser.User_ID)
+		defer cancel()
+		// luego de generar el token, vamos a actualizar todos los tokens.
+		// le pasaremos el token y el token y el id de usuario
+		generate.UpdateAllTokens(token, refreshToken, founduser.User_ID)
+
+		// Caso de que todo funcione bien, devolvemos un estado http de encontrado y el usuario encontrado
+		c.JSON(http.StatusFound, founduser)
+
+	}
+
 }
