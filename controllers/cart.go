@@ -8,7 +8,9 @@ import (
 	"time"
 
 	"github.com/FrancoRutigliano/EcommerceGolang/database"
+	"github.com/FrancoRutigliano/EcommerceGolang/models"
 	"github.com/gin-gonic/gin"
+	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 )
@@ -122,7 +124,61 @@ func (app *Application) RemoveItem() gin.HandlerFunc {
 }
 
 func GetItemFromCart() gin.HandlerFunc {
-	panic("Obtener un item del carrito")
+	return func(c *gin.Context) {
+		user_id := c.Query("id")
+		// comprobamos si el id que devuelve el query esta vacio
+		if user_id == "" {
+			// al querer obtener un item del carrito vamos a devolver al header un content/type
+			// Encabezado de la solicitud http, con informacion extra de la solicitud en cuestion
+			c.Header("Content-Type", "application/json")
+			c.JSON(http.StatusNotFound, gin.H{"error": "invalid id"})
+			// abortamos funcion
+			c.Abort()
+			return
+		}
+
+		// de lo que nos devuelve la base de datos probablemente en formato hexadecimal, lo tendremos que convertir para despues pasarlo a la funcion que llama a la base de datos
+
+		usert_id, _ := primitive.ObjectIDFromHex(user_id)
+
+		// vamos a crear un contexto que va a ser creado unicamente para la funcion que llame a la base de datos
+		var ctx, cancel = context.WithTimeout(context.Background(), 100*time.Second)
+		defer cancel()
+
+		var filledCart models.User
+
+		// BSON.D es una representacion ordenada de un BSON
+		err := UserCollection.FindOne(ctx, bson.D{primitive.E{Key: "_id", Value: usert_id}}).Decode(&filledCart)
+		if err != nil {
+			log.Println(err)
+			c.IndentedJSON(500, "id not found")
+			return
+		}
+
+		filter_match := bson.D{{Key: "$match", Value: bson.D{primitive.E{Key: "_id", Value: usert_id}}}}
+		unwind := bson.D{{Key: "$unwind", Value: bson.D{primitive.E{Key: "path", Value: "$usertcart"}}}}
+		grouping := bson.D{{Key: "$group", Value: bson.D{primitive.E{Key: "_id", Value: "$_id"}, {Key: "total", Value: bson.D{primitive.E{Key: "$sum", Value: "usertcart.price"}}}}}}
+		// Ahora vamos a ejecutar una operacion de agregacion a una colección
+		// Estas operaciones de agregación a la base de datos son filter_match, unwind y grouping
+		PointCursor, err := UserCollection.Aggregate(ctx, mongo.Pipeline{filter_match, unwind, grouping})
+
+		if err != nil {
+			log.Println(err)
+		}
+
+		var listing []bson.M
+
+		if err = PointCursor.All(ctx, &listing); err != nil {
+			log.Println(err)
+			c.AbortWithStatus(http.StatusInternalServerError)
+			return
+		}
+		for _, json := range listing {
+			c.IndentedJSON(200, json["total"])
+			c.IndentedJSON(200, filledCart.UserCart)
+		}
+		ctx.Done()
+	}
 }
 
 func (app *Application) BuyFromCart() gin.HandlerFunc {
